@@ -1,22 +1,30 @@
+# -------------------- IMPORT LIBRARIES --------------------
 import streamlit as st
 import joblib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 # -------------------- LOAD MODEL --------------------
+# Load trained model and scaler
 model, scaler = joblib.load("model.pkl")
 
+
+# -------------------- PAGE SETTINGS --------------------
 st.set_page_config(page_title="Manufacturing Dashboard", layout="centered")
 
 st.title("🏭 Manufacturing Output Prediction Dashboard")
 st.markdown("Enter machine parameters to predict **Parts Per Hour**")
 
-# -------------------- INPUTS --------------------
+
+# -------------------- INPUT SECTION --------------------
 st.subheader("🔢 Machine Parameters")
 
+# Split layout into 2 columns
 col1, col2 = st.columns(2)
 
+# Numeric inputs (user enters machine values)
 with col1:
     inj_temp = st.number_input("Injection Temperature", 0.0, 500.0, 200.0)
     cycle_time = st.number_input("Cycle Time", 0.0, 100.0, 30.0)
@@ -30,17 +38,20 @@ with col2:
     ambient_temp = st.number_input("Ambient Temperature", 0.0, 150.0, 25.0)
     operator_exp = st.number_input("Operator Experience", 0.0, 30.0, 5.0)
 
-# -------------------- CATEGORICAL --------------------
+
+# -------------------- CATEGORICAL INPUTS --------------------
 st.subheader("📊 Machine Settings")
 
 machine_type = st.selectbox("Machine Type", ["Type_A", "Type_B", "Type_C"])
 material_grade = st.selectbox("Material Grade", ["Premium", "Standard"])
-day = st.selectbox("Day of Week", 
+day = st.selectbox("Day of Week",
                    ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"])
 
-# -------------------- PREDICTION --------------------
+
+# -------------------- PREDICTION BUTTON --------------------
 if st.button("🚀 Predict Output"):
 
+    # Create input dataframe
     input_df = pd.DataFrame([{
         "Injection_Temperature": inj_temp,
         "Injection_Pressure": inj_pressure,
@@ -56,30 +67,33 @@ if st.button("🚀 Predict Output"):
         "Day_of_Week": day
     }])
 
-    # Feature Engineering
-    input_df["Temperature_Pressure_Ratio"] = (
-        input_df["Injection_Temperature"] / (input_df["Injection_Pressure"] + 1e-5)
-    )
 
-    # Encoding
+    # -------------------- ENCODING --------------------
+    # Convert categorical to numeric
     input_df = pd.get_dummies(input_df)
 
-    # Align features
-    model_features = scaler.feature_names_in_
+
+    # -------------------- ALIGN FEATURES --------------------
+    # Match training features
+    model_features = scaler.feature_names_in_ if hasattr(scaler, "feature_names_in_") else input_df.columns
     input_df = input_df.reindex(columns=model_features, fill_value=0)
 
-    # Scale
+
+    # -------------------- SCALING --------------------
     input_scaled = scaler.transform(input_df)
 
-    # Predict
+
+    # -------------------- PREDICTION --------------------
     prediction = model.predict(input_scaled)[0]
 
-    # Handle negative
+    # Avoid negative values
     prediction = max(0, prediction)
+
 
     # -------------------- OUTPUT --------------------
     st.subheader("📈 Prediction Result")
     st.success(f"Predicted Parts Per Hour: {round(prediction, 2)}")
+
 
     # -------------------- PERFORMANCE LABEL --------------------
     if prediction > 40:
@@ -89,7 +103,8 @@ if st.button("🚀 Predict Output"):
     else:
         st.error("❌ Low Efficiency")
 
-    # -------------------- INPUT VISUALIZATION --------------------
+
+    # -------------------- INPUT GRAPH --------------------
     st.subheader("📊 Input Parameter Overview")
 
     input_values = [
@@ -102,13 +117,18 @@ if st.button("🚀 Predict Output"):
         "Viscosity", "Ambient", "Age", "Experience", "Maintenance"
     ]
 
-    plt.figure()
-    plt.bar(labels, input_values)
+    # Create clean figure
+    fig, ax = plt.subplots()
+    ax.bar(labels, input_values)
     plt.xticks(rotation=45)
-    st.pyplot(plt)
+
+    st.pyplot(fig)
+
 
     # -------------------- FEATURE IMPORTANCE --------------------
+    # Only for tree models like Random Forest
     if hasattr(model, "feature_importances_"):
+
         st.subheader("⭐ Top Influencing Factors")
 
         importances = model.feature_importances_
@@ -119,9 +139,12 @@ if st.button("🚀 Predict Output"):
             "Importance": importances
         }).sort_values(by="Importance", ascending=False).head(5)
 
+        # Show table
         st.write(feat_df)
 
-        plt.figure()
-        plt.barh(feat_df["Feature"], feat_df["Importance"])
-        plt.gca().invert_yaxis()
-        st.pyplot(plt)
+        # Plot importance
+        fig2, ax2 = plt.subplots()
+        ax2.barh(feat_df["Feature"], feat_df["Importance"])
+        ax2.invert_yaxis()
+
+        st.pyplot(fig2)
